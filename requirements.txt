@@ -2,3 +2,5 @@ fastapi
 pydantic
 typing
 pandas
+streamlit
+requests

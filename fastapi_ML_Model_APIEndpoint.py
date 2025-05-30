@@ -1,15 +1,15 @@
-from fastapi import FastAPI, Path, HTTPException, Query
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, computed_field
-from typing import Annotated, Literal, Optional
-import json
+from typing import Literal, Annotated
 import pickle
 import pandas as pd
 
-app = FastAPI()
-
+# import the ml model
 with open('model.pkl', 'rb') as f:
     model = pickle.load(f)
+
+app = FastAPI()
 
 tier_1_cities = ["Mumbai", "Delhi", "Bangalore", "Chennai", "Kolkata", "Hyderabad", "Pune"]
 tier_2_cities = [
@@ -21,21 +21,22 @@ tier_2_cities = [
     "Kolhapur", "Bilaspur", "Jalandhar", "Noida", "Guntur", "Asansol", "Siliguri"
 ]
 
+# pydantic model to validate incoming data
 class UserInput(BaseModel):
 
-    age:  Annotated[int , Field(..., description="Provide Age of user")]
-    weight: Annotated[float, Field(..., description="Provide weight of user")]
-    height: Annotated[float, Field(..., description="Provide height of the patient")]
-    income_lpa: Annotated[float, Field(..., description="Age of the user")]
-    smoker: Annotated[float, Field(..., description="Is user a Smoker")]
-    city: Annotated[str, Field(..., description="The user's city")]
-    occupation: Annotated[Literal['retired', 'freelancer', 'student', 'government_job','business_owner', 'unemployed', 'private_job'], Field(..., description="Provide Occupation of User")]
-
+    age: Annotated[int, Field(..., gt=0, lt=120, description='Age of the user')]
+    weight: Annotated[float, Field(..., gt=0, description='Weight of the user')]
+    height: Annotated[float, Field(..., gt=0, lt=2.5, description='Height of the user')]
+    income_lpa: Annotated[float, Field(..., gt=0, description='Annual salary of the user in lpa')]
+    smoker: Annotated[bool, Field(..., description='Is user a smoker')]
+    city: Annotated[str, Field(..., description='The city that the user belongs to')]
+    occupation: Annotated[Literal['retired', 'freelancer', 'student', 'government_job',
+       'business_owner', 'unemployed', 'private_job'], Field(..., description='Occupation of the user')]
+    
     @computed_field
     @property
     def bmi(self) -> float:
-        bmi = round(self.weight/(self.height**2),2)
-        return bmi
+        return self.weight/(self.height**2)
     
     @computed_field
     @property
@@ -68,18 +69,17 @@ class UserInput(BaseModel):
         else:
             return 3
 
-
 @app.post('/predict')
 def predict_premium(data: UserInput):
 
     input_df = pd.DataFrame([{
-        'bmi': data.bmi,
+        'BMI': data.bmi,
         'age_group': data.age_group,
         'lifestyle_risk': data.lifestyle_risk,
         'city_tier': data.city_tier,
         'income_lpa': data.income_lpa,
-        'occupation': data.occupation,
-    }])  
+        'occupation': data.occupation
+    }])
 
     prediction = model.predict(input_df)[0]
 
